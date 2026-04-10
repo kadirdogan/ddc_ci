@@ -1,0 +1,77 @@
+CHANGELOG
+=========
+Tarih: 2026-04-10
+
+
+────────────────────────────────────────────────────────
+DEĞİŞİKLİK 1 — Firmware bug fix (kritik)
+Dosya: ch552_pot_hid/src/USBhandler.c
+────────────────────────────────────────────────────────
+
+Problem:
+  UpPoint1_Busy flag'i USB bus reset handler'ında sıfırlanmıyordu.
+  Windows startup sırasında USB enumeration bir veya birden fazla bus
+  reset sinyali gönderir. Eğer CH552 o anda EP1 üzerinden veri
+  gönderiyorsa (UpPoint1_Busy = 1), transfer yarıda kesilir; ancak
+  USB_EP1_IN() callback'i tetiklenmediği için flag 1 olarak kalır.
+  Bundan sonra USB_EP1_send() her çağrıda sessizce return 0 döner —
+  cihaz çalışır görünür ama hiç HID raporu göndermez.
+  Kullanıcı CH552'yi fiziksel olarak resetleyince MCU yeniden başlar,
+  UpPoint1_Busy = 0 başlangıç değerine döner ve çalışır.
+
+Fix (3 satır ekleme/değişiklik):
+  1. Dosyanın üstüne extern bildirimi eklendi:
+       extern volatile __xdata uint8_t UpPoint1_Busy;
+
+  2. UIF_BUS_RST handler'ına reset eklendi:
+       UpPoint1_Busy = 0;
+
+  Yeniden derleme ve flash gerektirir.
+
+
+────────────────────────────────────────────────────────
+DEĞİŞİKLİK 2 — Firmware minor fix
+Dosya: ch552_pot_hid/src/USBhandler.c
+────────────────────────────────────────────────────────
+
+Problem:
+  USBDeviceCfg() içinde CH552 için UDEV_CTRL = bUD_PD_DIS satırı
+  hem #if CH552 bloğu içinde hem de koşulsuz olarak iki kez
+  atanıyordu. Zararsız ama gereksiz.
+
+Fix:
+  #if / #else yapısıyla tek atamaya indirildi.
+
+  Yeniden derleme ve flash gerektirir.
+
+
+────────────────────────────────────────────────────────
+DEĞİŞİKLİK 3 — Python host tarafı
+Dosya: monitor_ctrl.py
+────────────────────────────────────────────────────────
+
+Problem:
+  force_reenumerate() fonksiyonu cihazı open/close yapıp 1.5s
+  bekliyordu. Cihaz startup'ta henüz hazır değilse exception
+  sessizce yutulur ve fonksiyon hiçbir şey yapmamış olurdu.
+
+Fix:
+  force_reenumerate() kaldırıldı.
+  connect_device() içine bağlantı sonrası 1.5 saniyelik drain
+  döngüsü eklendi: CH552'nin startup buffer'ındaki stale ADC
+  verisi atılır, USB stack stabilize olur.
+  Retry döngüsüne dev.close() guard'ı eklendi.
+
+  Yeniden derleme gerekmez, doğrudan çalışır.
+
+
+────────────────────────────────────────────────────────
+YEDEKLER
+────────────────────────────────────────────────────────
+
+  scratch/ddc_ci_backup_20260410.bundle      — ddc_ci git reposu
+  scratch/ch552_pot_hid_backup_20260410.bundle — ch552_pot_hid git reposu
+
+  Geri yüklemek için:
+    git clone scratch/ddc_ci_backup_20260410.bundle ddc_ci_restored
+    git clone scratch/ch552_pot_hid_backup_20260410.bundle ch552_restored
