@@ -12,7 +12,7 @@ CH552 mikrodenetleyici → USB HID → Python daemon → DDC/CI (Windows dxva2)
 | MCU | WeAct Studio CH552 Core Board (DIP20) |
 | POT1 (Brightness) | 10kΩ — orta bacak P1.1, uçlar GND / 3.3V |
 | POT2 (Contrast) | 10kΩ — orta bacak P1.4, uçlar GND / 3.3V |
-| LED | P3.0 — ADC test göstergesi |
+| LED | P3.0 — enumerate göstergesi |
 
 ---
 
@@ -21,10 +21,8 @@ CH552 mikrodenetleyici → USB HID → Python daemon → DDC/CI (Windows dxva2)
 ```
 ddc_ci/
 ├── monitor_ctrl.py          ← Ana Python daemon
-├── hid_test2.py             ← HID veri test scripti
-├── ddc_test.py              ← monitorcontrol kütüphane testi
-├── ddc_test2.py             ← dxva2 native API testi
-└── ch552_pot_hid/           ← Firmware (ayrı git repo)
+├── CHANGELOG.txt
+└── firmware/                ← CH552 firmware
     ├── ch552_pot_hid.ino
     └── src/
         ├── USBconstant.c/h  ← Vendor HID descriptor (0xFF00)
@@ -53,12 +51,12 @@ VID: 0x1209   PID: 0xC55D
 Usage Page: 0xFF00 (Vendor Defined)
 ```
 
-Windows bu cihazı klavye olarak görmez.
+Windows bu cihazı klavye olarak görmez, sürücü kurulumu gerekmez.
 
 ### ADC
 
 CH552 ADC 8-bit, dahili referans nedeniyle gerçek aralık **4–174**.  
-Kanal seçimi `ADC_CHAN0` / `ADC_CHAN1` bitleri ile yapılıyor (`ADC_CTRL` değil).
+Kanal seçimi `ADC_CHAN0` / `ADC_CHAN1` bitleri ile yapılıyor.
 
 ```
 P1.1 → ADC kanal 0 (CHAN1=0, CHAN0=0)
@@ -68,11 +66,9 @@ P1.4 → ADC kanal 1 (CHAN1=0, CHAN0=1)
 ### HID Paketi
 
 ```
-Ep1Buffer[0] = brightness (ADC kanal 0)
-Ep1Buffer[1] = contrast   (ADC kanal 1)
+HIDKey[0] = brightness (ADC kanal 0)
+HIDKey[1] = contrast   (ADC kanal 1)
 ```
-
-Gönderim `USB_EP1_send()` + `HIDKey[]` üzerinden yapılıyor (`USBHIDKeyboard.c`).
 
 ### Flash
 
@@ -88,8 +84,6 @@ WCHISPTool v3.9 ile flash yap.
 ```
 pip install hid
 ```
-
-`monitorcontrol` kütüphanesi artık kullanılmıyor — yerini `dxva2` (Windows native) aldı.
 
 ### Çalıştırma
 
@@ -124,12 +118,18 @@ Pot tam sola → 100, tam sağa → 0 (ters bağlantı nedeniyle).
 
 - OSD exclusive fullscreen (DirectX/Vulkan) üzerinde görünmez
 - Contrast yanıtı brightness'a göre daha kaba — Dell SE2717H monitörün DDC/CI implementasyonu
-- Program başlangıcında `_get_monitor_handles()` birkaç saniye sürebilir
 
 ---
 
 ## Sonraki Adımlar
 
 - Firmware smoothing buffer (ADC gürültüsünü azalt)
-- `_get_monitor_handles()` lazy init (başlangıç gecikmesini gider)
-- Tek git repo (firmware + Python)
+- Standalone exe (PyInstaller)
+- Özel PCB tasarımı
+
+---
+
+## Kaynak
+
+Blog yazısı: [DDC/CI: CH552 ve Python ile Monitör Kontrolü](https://doankadir.blogspot.com)  
+Kaynak kod: [github.com/kadirdogan/ddc_ci](https://github.com/kadirdogan/ddc_ci)
