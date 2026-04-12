@@ -57,11 +57,17 @@ void setup() {
 }
 
 void loop() {
+    static uint8_t last_b = 255, last_c = 255;
+
     uint8_t b = adc_read_ch(0);  // P1.1
     uint8_t c = adc_read_ch(1);  // P1.4
 
-    HIDKey[0] = b;
-    HIDKey[1] = c;
+    // ±1 raw jitter'i yoksay
+    if (b > last_b + 1 || b + 1 < last_b) last_b = b;
+    if (c > last_c + 1 || c + 1 < last_c) last_c = c;
+
+    HIDKey[0] = last_b;
+    HIDKey[1] = last_c;
     USB_EP1_send();
     delay(50);
 }
