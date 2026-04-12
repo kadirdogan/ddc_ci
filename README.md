@@ -112,6 +112,21 @@ def map_val(raw):
 
 Pot tam sola → 100, tam sağa → 0 (ters bağlantı nedeniyle).
 
+### Kontrat Alt Limiti
+
+Parlaklık `[0, 100]` aralığına map'lenirken kontrast `[25, 100]` aralığına map'lenir:
+
+```python
+CONTRAST_MIN = 25
+CONTRAST_MAX = 100
+
+def map_contrast(raw):
+    val = (ADC_MAX - raw) * (CONTRAST_MAX - CONTRAST_MIN) // (ADC_MAX - ADC_MIN) + CONTRAST_MIN
+    return max(CONTRAST_MIN, min(CONTRAST_MAX, val))
+```
+
+Bu durum monitörün OSD menüsünden 0'a kadar inebildiği halde bu tool ile yalnızca 25'e kadar inilebilmesine neden olur. Screenbright gibi üçüncü parti araçların da kendi alt limitleri olabilir (örn. 20). Limiti değiştirmek için `CONTRAST_MIN` sabitini düzenlemek yeterlidir.
+
 ---
 
 ## Bilinen Sınırlamalar
