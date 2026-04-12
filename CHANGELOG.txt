@@ -1,5 +1,56 @@
 CHANGELOG
 =========
+
+
+────────────────────────────────────────────────────────
+Tarih: 2026-04-12
+────────────────────────────────────────────────────────
+
+DEĞİŞİKLİK — Firmware fix (ADC hysteresis)
+Dosya: firmware/ch552_pot_hid.ino
+────────────────────────────────────────────────────────
+
+Problem:
+  loop() fonksiyonu her döngüde ham ADC değerini doğrudan karşılaştırıyordu.
+  Ham ADC ±1 seviyesinde sürekli titreştiğinde (ör. 55→56→55→56) gereksiz
+  HID raporu gönderiliyordu.
+
+Fix:
+  loop() içine hysteresis eklendi: son gönderilen değer ile yeni değer
+  arasındaki fark belirli bir eşiği aşmadıkça rapor gönderilmiyor.
+  Böylece ±1 gürültü gönderim katmanına yansımadan bastırılıyor.
+
+  Yeniden derleme ve flash gerektirir.
+
+
+────────────────────────────────────────────────────────
+Tarih: 2026-04-11
+────────────────────────────────────────────────────────
+
+DEĞİŞİKLİK — Python host tarafı (ADC jitter ve değer atlama)
+Dosya: monitor_ctrl.py
+────────────────────────────────────────────────────────
+
+Problem 1 — Değer atlama:
+  Değişim eşiği 2 olarak ayarlıydı; bu nedenle potansiyometre
+  her iki adımda bir değer gönderiyordu (ör. 10→12→14, 11/13 atlanıyordu).
+
+Fix 1:
+  Değişim eşiği 2'den 1'e düşürüldü. Potansiyometre artık 1-1 adım
+  gönderecek şekilde çalışıyor.
+
+Problem 2 — ADC jitter:
+  Ham ADC baytları ±1 titreşiyordu (ör. 55-56-55-56), monitor_ctrl
+  bunu gereksiz DDC/CI komutu olarak işliyordu.
+
+Fix 2:
+  Son 3 örnek üzerinde hareketli ortalama hesaplanıyor; titreşim
+  yumuşatılıyor.
+
+  Yeniden derleme gerekmez, doğrudan çalışır.
+
+
+────────────────────────────────────────────────────────
 Tarih: 2026-04-10
 
 
