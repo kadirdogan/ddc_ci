@@ -3,7 +3,6 @@ import threading
 import queue
 import time
 import ctypes
-from collections import deque
 import ctypes.wintypes as wintypes
 from ctypes import windll, byref, sizeof
 
@@ -343,18 +342,14 @@ def main():
     dev = connect_device()
     prev_b, prev_c = -1, -1
     last = "BRT"
-    buf_b: deque = deque(maxlen=3)
-    buf_c: deque = deque(maxlen=3)
 
     try:
         while True:
             try:
                 data = dev.read(64)
                 if data and len(data) >= 2:
-                    buf_b.append(data[0])
-                    buf_c.append(data[1])
-                    b = map_brightness(sum(buf_b) // len(buf_b))
-                    c = map_contrast(sum(buf_c) // len(buf_c))
+                    b = map_brightness(data[0])
+                    c = map_contrast(data[1])
                     bc = abs(b - prev_b) >= 1
                     cc = abs(c - prev_c) >= 1
                     if bc or cc:
