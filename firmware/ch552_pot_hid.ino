@@ -59,13 +59,27 @@ void setup() {
 void loop() {
     static uint8_t last_b = 255, last_c = 255;
     static uint8_t sent_b = 255, sent_c = 255;
+    static uint8_t prev_raw_b = 255, prev_raw_c = 255;
+    static uint8_t stable_b = 0, stable_c = 0;
 
     uint8_t b = adc_read_ch(0);  // P1.1
     uint8_t c = adc_read_ch(1);  // P1.4
 
-    // ±1 raw jitter'i yoksay
-    if (b > last_b + 1 || b + 1 < last_b) last_b = b;
-    if (c > last_c + 1 || c + 1 < last_c) last_c = c;
+    // ±1 raw jitter'i yoksay; aynı değer 3 okuma üst üste gelirse sınırda takılmayı önle
+    {
+        __data int16_t d = (int16_t)b - (int16_t)last_b;
+        if (d > 1 || d < -1) { last_b = b; stable_b = 0; }
+        else if (b == prev_raw_b) { if (stable_b < 3) stable_b++; if (stable_b >= 3) last_b = b; }
+        else stable_b = 0;
+        prev_raw_b = b;
+    }
+    {
+        __data int16_t d = (int16_t)c - (int16_t)last_c;
+        if (d > 1 || d < -1) { last_c = c; stable_c = 0; }
+        else if (c == prev_raw_c) { if (stable_c < 3) stable_c++; if (stable_c >= 3) last_c = c; }
+        else stable_c = 0;
+        prev_raw_c = c;
+    }
 
     // Sadece değer değiştiğinde gönder
     if (last_b != sent_b || last_c != sent_c) {
