@@ -1,26 +1,28 @@
 # CH552 DDC/CI Pot Controller
 
-Analog potansiyometre ile monitör parlaklık ve kontrast kontrolü.  
-CH552 mikrodenetleyici → USB HID → Python daemon → DDC/CI (Windows dxva2)
+> 🌐 [Türkçe](README.tr.md)
+
+Monitor brightness and contrast control via analog potentiometers.  
+CH552 microcontroller → USB HID → Python daemon → DDC/CI (Windows dxva2)
 
 ---
 
-## Donanım
+## Hardware
 
-| Bileşen | Detay |
+| Component | Detail |
 |---|---|
 | MCU | WeAct Studio CH552 Core Board (DIP20) |
-| POT1 (Brightness) | 10kΩ — orta bacak P1.1, uçlar GND / 3.3V |
-| POT2 (Contrast) | 10kΩ — orta bacak P1.4, uçlar GND / 3.3V |
-| LED | P3.0 — enumerate göstergesi |
+| POT1 (Brightness) | 10kΩ — wiper to P1.1, ends to GND / 3.3V |
+| POT2 (Contrast) | 10kΩ — wiper to P1.4, ends to GND / 3.3V |
+| LED | P3.0 — enumeration indicator |
 
 ---
 
-## Proje Yapısı
+## Project Structure
 
 ```
 ddc_ci/
-├── monitor_ctrl.py          ← Ana Python daemon
+├── monitor_ctrl.py          ← Main Python daemon
 ├── CHANGELOG.txt
 └── firmware/                ← CH552 firmware
     ├── ch552_pot_hid.ino
@@ -38,68 +40,68 @@ ddc_ci/
 
 ## Firmware
 
-### Arduino IDE Ayarları
+### Arduino IDE Settings
 
 - **Board:** CH552 Board
 - **Clock:** 24 MHz (internal)
 - **USB Settings:** USER CODE w/ 148B USB ram
 
-### USB Cihaz
+### USB Device
 
 ```
 VID: 0x1209   PID: 0xC55D
 Usage Page: 0xFF00 (Vendor Defined)
 ```
 
-Windows bu cihazı klavye olarak görmez, sürücü kurulumu gerekmez.
+Windows does not enumerate this as a keyboard; no driver installation required.
 
 ### ADC
 
-CH552 ADC 8-bit, dahili referans nedeniyle gerçek aralık **4–174**.  
-Kanal seçimi `ADC_CHAN0` / `ADC_CHAN1` bitleri ile yapılıyor.
+The CH552 ADC is 8-bit. Due to the internal reference, the effective range is **4–174**.  
+Channel selection is done via `ADC_CHAN0` / `ADC_CHAN1` bits.
 
 ```
-P1.1 → ADC kanal 0 (CHAN1=0, CHAN0=0)
-P1.4 → ADC kanal 1 (CHAN1=0, CHAN0=1)
+P1.1 → ADC channel 0 (CHAN1=0, CHAN0=0)
+P1.4 → ADC channel 1 (CHAN1=0, CHAN0=1)
 ```
 
-### HID Paketi
+### HID Packet
 
 ```
-HIDKey[0] = brightness (ADC kanal 0)
-HIDKey[1] = contrast   (ADC kanal 1)
+HIDKey[0] = brightness (ADC channel 0)
+HIDKey[1] = contrast   (ADC channel 1)
 ```
 
-### Flash
+### Flashing
 
-BOOT moduna girmek için: P3.6 butonuna basılı tut → USB tak → bırak.  
-WCHISPTool v3.9 ile flash yap.
+To enter BOOT mode: hold P3.6 button → plug USB → release.  
+Flash using WCHISPTool v3.9.
 
 ---
 
 ## Python Daemon
 
-### Bağımlılıklar
+### Dependencies
 
 ```
 pip install hid
 ```
 
-### Çalıştırma
+### Running
 
 ```
 python monitor_ctrl.py
 ```
 
-### Mimari
+### Architecture
 
-- **HID okuma:** `dev.read(64)` non-blocking, 20ms poll
+- **HID read:** `dev.read(64)` non-blocking, 20ms poll
 - **DDC/CI:** `dxva2.SetMonitorBrightness` / `SetMonitorContrast` — Windows native API
-- **Queue:** `maxsize=1` — eski komut işlenmeden yeni gelirse eski atılır
-- **OSD:** Win32 GDI layered window, sağ alt köşe, Sony PVM fosfor yeşil, 2 sn auto-hide
-- **Reconnect:** USB çekilince `signal lost` mesajı, otomatik yeniden bağlanma
+- **Queue:** `maxsize=1` — new value drops the previous if unprocessed
+- **OSD:** Win32 GDI layered window, bottom-right corner, Sony PVM phosphor green, 2s auto-hide
+- **Reconnect:** prints `signal lost` on USB disconnect, reconnects automatically
 
-### Değer Dönüşümü
+### Value Mapping
 
 ```python
 ADC_MIN = 4
@@ -110,11 +112,11 @@ def map_val(raw):
     return max(0, min(100, val))
 ```
 
-Pot tam sola → 100, tam sağa → 0 (ters bağlantı nedeniyle).
+Pot fully left → 100, fully right → 0 (due to reverse wiring).
 
-### Kontrat Alt Limiti
+### Contrast Floor
 
-Parlaklık `[0, 100]` aralığına map'lenirken kontrast `[25, 100]` aralığına map'lenir:
+Brightness maps to `[0, 100]`; contrast maps to `[25, 100]`:
 
 ```python
 CONTRAST_MIN = 25
@@ -125,26 +127,26 @@ def map_contrast(raw):
     return max(CONTRAST_MIN, min(CONTRAST_MAX, val))
 ```
 
-Bu durum monitörün OSD menüsünden 0'a kadar inebildiği halde bu tool ile yalnızca 25'e kadar inilebilmesine neden olur. Screenbright gibi üçüncü parti araçların da kendi alt limitleri olabilir (örn. 20). Limiti değiştirmek için `CONTRAST_MIN` sabitini düzenlemek yeterlidir.
+The monitor's own OSD menu can go down to 0, but this tool bottoms out at 25. Third-party tools like Screenbright may have their own floors (e.g. 20). To change the limit, edit the `CONTRAST_MIN` constant.
 
 ---
 
-## Bilinen Sınırlamalar
+## Known Limitations
 
-- OSD exclusive fullscreen (DirectX/Vulkan) üzerinde görünmez
-- Contrast yanıtı brightness'a göre daha kaba — Dell SE2717H monitörün DDC/CI implementasyonu
+- OSD may not appear in true exclusive fullscreen (`VK_EXT_full_screen_exclusive`) mode
+- Contrast response is coarser than brightness — limitation of the Dell SE2717H DDC/CI implementation
 
 ---
 
-## Sonraki Adımlar
+## Roadmap
 
-- Firmware smoothing buffer (ADC gürültüsünü azalt)
+- ADC noise: partially addressed with hysteresis; RC filter + oversampling deferred
 - Standalone exe (PyInstaller)
-- Özel PCB tasarımı
+- Custom PCB design
 
 ---
 
-## Kaynak
+## References
 
-Blog yazısı: [DDC/CI: CH552 ve Python ile Monitör Kontrolü](https://doankadir.blogspot.com)  
-Kaynak kod: [github.com/kadirdogan/ddc_ci](https://github.com/kadirdogan/ddc_ci)
+Blog post: [DDC/CI: Monitor Control with CH552 and Python](https://doankadir.blogspot.com)  
+Source code: [github.com/kadirdogan/ddc_ci](https://github.com/kadirdogan/ddc_ci)
