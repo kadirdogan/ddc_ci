@@ -106,11 +106,11 @@ CONTRAST_MIN = 25
 CONTRAST_MAX = 100
 
 def map_brightness(raw):
-    val = (ADC_MAX - raw) * 100 // (ADC_MAX - ADC_MIN)
+    val = round((ADC_MAX - raw) * 100 / (ADC_MAX - ADC_MIN))
     return max(0, min(100, val))
 
 def map_contrast(raw):
-    val = (ADC_MAX - raw) * (CONTRAST_MAX - CONTRAST_MIN) // (ADC_MAX - ADC_MIN) + CONTRAST_MIN
+    val = round((ADC_MAX - raw) * (CONTRAST_MAX - CONTRAST_MIN) / (ADC_MAX - ADC_MIN)) + CONTRAST_MIN
     return max(CONTRAST_MIN, min(CONTRAST_MAX, val))
 
 # ── dxva2 monitor handle'lari ────────────────────────────
