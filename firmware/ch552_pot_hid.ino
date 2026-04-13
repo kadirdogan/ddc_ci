@@ -58,6 +58,7 @@ void setup() {
 
 void loop() {
     static uint8_t last_b = 255, last_c = 255;
+    static uint8_t sent_b = 255, sent_c = 255;
 
     uint8_t b = adc_read_ch(0);  // P1.1
     uint8_t c = adc_read_ch(1);  // P1.4
@@ -66,8 +67,14 @@ void loop() {
     if (b > last_b + 1 || b + 1 < last_b) last_b = b;
     if (c > last_c + 1 || c + 1 < last_c) last_c = c;
 
-    HIDKey[0] = last_b;
-    HIDKey[1] = last_c;
-    USB_EP1_send();
+    // Sadece değer değiştiğinde gönder
+    if (last_b != sent_b || last_c != sent_c) {
+        sent_b = last_b;
+        sent_c = last_c;
+        HIDKey[0] = sent_b;
+        HIDKey[1] = sent_c;
+        USB_EP1_send();
+    }
+
     delay(50);
 }
