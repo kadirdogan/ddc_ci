@@ -141,6 +141,7 @@ The monitor's own OSD menu can go down to 0, but this tool bottoms out at 25. Th
 ## Roadmap
 
 - ADC noise: partially addressed with hysteresis; RC filter + oversampling deferred
+- **Input source switching via DDC/CI** — confirmed working; VGA=`0x01`, HDMI-1=`0x11` (VCP 0x60); add a button or third pot position to toggle inputs
 - Standalone exe (PyInstaller)
 - Custom PCB design
 

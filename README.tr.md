@@ -141,6 +141,7 @@ Bu durum monitörün OSD menüsünden 0'a kadar inebildiği halde bu tool ile ya
 ## Sonraki Adımlar
 
 - ADC gürültüsü: hysteresis ile kısmen çözüldü; RC filtre + oversampling ertelendi
+- **DDC/CI ile giriş kaynağı değiştirme** — çalıştığı doğrulandı; VGA=`0x01`, HDMI-1=`0x11` (VCP 0x60); buton veya üçüncü pot pozisyonu ile kaynak geçişi eklenecek
 - Standalone exe (PyInstaller)
 - Özel PCB tasarımı
 
