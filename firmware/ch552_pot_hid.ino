@@ -15,11 +15,15 @@ extern volatile __xdata uint8_t UsbConfig;
 uint8_t adc_read_ch(uint8_t chan) {
     ADC_CHAN1 = (chan >> 1) & 1;
     ADC_CHAN0 = (chan >> 0) & 1;
-    ADC_START = 1;          // dummy: mux settle için bir dönüşüm at
+    ADC_START = 1;              // dummy: mux settle
     while (ADC_START);
-    ADC_START = 1;          // gerçek okuma
-    while (ADC_START);
-    return ADC_DATA;
+    __data uint16_t sum = 0;
+    for (__data uint8_t i = 0; i < 8; i++) {
+        ADC_START = 1;
+        while (ADC_START);
+        sum += ADC_DATA;
+    }
+    return (uint8_t)(sum >> 3); // 8 sample ortalaması
 }
 
 void led_blink(uint8_t count) {
