@@ -102,16 +102,11 @@ PRODUCT_ID = 0xC55D
 ADC_MIN = 4
 ADC_MAX = 174
 
-CONTRAST_MIN = 25
-CONTRAST_MAX = 100
-
 def map_brightness(raw):
-    val = round((ADC_MAX - raw) * 100 / (ADC_MAX - ADC_MIN))
-    return max(0, min(100, val))
+    return max(0, min(100, round((ADC_MAX - raw) * 100 / (ADC_MAX - ADC_MIN))))
 
 def map_contrast(raw):
-    val = round((ADC_MAX - raw) * (CONTRAST_MAX - CONTRAST_MIN) / (ADC_MAX - ADC_MIN)) + CONTRAST_MIN
-    return max(CONTRAST_MIN, min(CONTRAST_MAX, val))
+    return max(0, min(100, round((ADC_MAX - raw) * 100 / (ADC_MAX - ADC_MIN))))
 
 # ── dxva2 monitor handle'lari ────────────────────────────
 _monitor_handles = []
