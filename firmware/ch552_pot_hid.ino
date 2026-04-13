@@ -15,7 +15,9 @@ extern volatile __xdata uint8_t UsbConfig;
 uint8_t adc_read_ch(uint8_t chan) {
     ADC_CHAN1 = (chan >> 1) & 1;
     ADC_CHAN0 = (chan >> 0) & 1;
-    ADC_START = 1;
+    ADC_START = 1;          // dummy: mux settle için bir dönüşüm at
+    while (ADC_START);
+    ADC_START = 1;          // gerçek okuma
     while (ADC_START);
     return ADC_DATA;
 }
