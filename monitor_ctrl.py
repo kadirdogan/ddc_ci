@@ -345,8 +345,14 @@ def main():
                 if data and len(data) >= 2:
                     b = map_brightness(data[0])
                     c = map_contrast(data[1])
-                    bc = abs(b - prev_b) >= 1
-                    cc = abs(c - prev_c) >= 1
+                    db = abs(b - prev_b)
+                    dc = abs(c - prev_c)
+                    bc = db >= 1
+                    cc = dc >= 1
+                    # İkisi aynı anda değişirse sadece büyük değişeni işle (crosstalk filtresi)
+                    if bc and cc:
+                        if db >= dc: cc = False
+                        else:        bc = False
                     if bc or cc:
                         if bc: last = "BRT"
                         if cc: last = "CON"
