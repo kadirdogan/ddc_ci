@@ -5,11 +5,18 @@ import time
 import ctypes
 import ctypes.wintypes as wintypes
 from ctypes import windll, byref, sizeof
+from collections import deque
 
 user32   = windll.user32
 gdi32    = windll.gdi32
 kernel32 = windll.kernel32
 dxva2    = windll.dxva2
+
+try:
+    import psutil
+    psutil.Process().nice(psutil.HIGH_PRIORITY_CLASS)
+except Exception:
+    pass
 
 user32.CreateWindowExW.restype  = wintypes.HWND
 user32.CreateWindowExW.argtypes = [
@@ -102,11 +109,18 @@ PRODUCT_ID = 0xC55D
 ADC_MIN = 4
 ADC_MAX = 174
 
+CONTRAST_MIN = 25
+CONTRAST_MAX = 100
+
+DEBOUNCE_MS = 150
+
 def map_brightness(raw):
-    return max(0, min(100, round((ADC_MAX - raw) * 100 / (ADC_MAX - ADC_MIN))))
+    val = (ADC_MAX - raw) * 100 // (ADC_MAX - ADC_MIN)
+    return max(0, min(100, val))
 
 def map_contrast(raw):
-    return max(0, min(100, round((ADC_MAX - raw) * 100 / (ADC_MAX - ADC_MIN))))
+    val = (ADC_MAX - raw) * (CONTRAST_MAX - CONTRAST_MIN) // (ADC_MAX - ADC_MIN) + CONTRAST_MIN
+    return max(CONTRAST_MIN, min(CONTRAST_MAX, val))
 
 # ── dxva2 monitor handle'lari ────────────────────────────
 _monitor_handles = []
@@ -147,18 +161,44 @@ def _ddc_worker():
         except Exception as e:
             print(f"DDC/CI: {e}")
 
-def set_monitor(brightness=None, contrast=None):
-    try:
-        _ddc_queue.put_nowait((brightness, contrast))
-    except queue.Full:
+# ── Debounce ─────────────────────────────────────────────
+_debounce_b    = None
+_debounce_c    = None
+_debounce_last = None
+_debounce_timer = None
+_debounce_lock  = threading.Lock()
+
+def _flush_debounce():
+    global _debounce_b, _debounce_c, _debounce_timer
+    with _debounce_lock:
+        b, c = _debounce_b, _debounce_c
+        _debounce_timer = None
+    if b is not None or c is not None:
         try:
-            _ddc_queue.get_nowait()
-        except queue.Empty:
-            pass
-        try:
-            _ddc_queue.put_nowait((brightness, contrast))
+            _ddc_queue.put_nowait((b, c))
         except queue.Full:
-            pass
+            try:
+                _ddc_queue.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                _ddc_queue.put_nowait((b, c))
+            except queue.Full:
+                pass
+
+def set_monitor_debounced(brightness=None, contrast=None):
+    global _debounce_b, _debounce_c, _debounce_timer
+    with _debounce_lock:
+        if brightness is not None:
+            _debounce_b = brightness
+        if contrast is not None:
+            _debounce_c = contrast
+        if _debounce_timer is not None:
+            _debounce_timer.cancel()
+        t = threading.Timer(DEBOUNCE_MS / 1000.0, _flush_debounce)
+        t.daemon = True
+        t.start()
+        _debounce_timer = t
 
 # ── OSD ─────────────────────────────────────────────────
 class OSD:
@@ -335,6 +375,9 @@ def main():
     threading.Thread(target=_ddc_worker, daemon=True).start()
 
     dev = connect_device()
+
+    buf_b = deque(maxlen=3)
+    buf_c = deque(maxlen=3)
     prev_b, prev_c = -1, -1
     last = "BRT"
 
@@ -343,25 +386,22 @@ def main():
             try:
                 data = dev.read(64)
                 if data and len(data) >= 2:
-                    b = map_brightness(data[0])
-                    c = map_contrast(data[1])
-                    db = abs(b - prev_b)
-                    dc = abs(c - prev_c)
-                    bc = db >= 1
-                    cc = dc >= 1
-                    # İkisi aynı anda değişirse sadece büyük değişeni işle (crosstalk filtresi)
-                    if bc and cc:
-                        if db >= dc: cc = False
-                        else:        bc = False
-                    if bc or cc:
-                        if bc: last = "BRT"
-                        if cc: last = "CON"
-                        set_monitor(
-                            brightness=b if bc else None,
-                            contrast=c if cc else None
-                        )
-                        osd.show(last, b, c)
-                        prev_b, prev_c = b, c
+                    buf_b.append(data[0])
+                    buf_c.append(data[1])
+                    if len(buf_b) == 3:
+                        b = map_brightness(sum(buf_b) // len(buf_b))
+                        c = map_contrast(sum(buf_c) // len(buf_c))
+                        bc = abs(b - prev_b) >= 1
+                        cc = abs(c - prev_c) >= 1
+                        if bc or cc:
+                            if bc: last = "BRT"
+                            if cc: last = "CON"
+                            set_monitor_debounced(
+                                brightness=b if bc else None,
+                                contrast=c if cc else None
+                            )
+                            osd.show(last, b, c)
+                            prev_b, prev_c = b, c
                 time.sleep(0.02)
 
             except OSError:
@@ -375,6 +415,8 @@ def main():
                     pass
                 time.sleep(1.0)
                 dev = connect_device()
+                buf_b.clear()
+                buf_c.clear()
                 prev_b, prev_c = -1, -1
 
     except KeyboardInterrupt:
@@ -383,9 +425,6 @@ def main():
             dev.close()
         except Exception:
             pass
-            time.sleep(1.0)
-            dev = connect_device()
-            prev_b, prev_c = -1, -1
 
 if __name__ == "__main__":
     main()
