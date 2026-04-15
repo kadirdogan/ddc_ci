@@ -5,7 +5,6 @@ import time
 import ctypes
 import ctypes.wintypes as wintypes
 from ctypes import windll, byref, sizeof
-from collections import deque
 
 user32   = windll.user32
 gdi32    = windll.gdi32
@@ -112,7 +111,7 @@ ADC_MAX = 174
 CONTRAST_MIN = 25
 CONTRAST_MAX = 100
 
-DEBOUNCE_MS = 150
+THROTTLE_MS = 80  # min DDC komutları arası süre (ms); ilk değişiklik anında gönderilir
 
 def map_brightness(raw):
     val = (ADC_MAX - raw) * 100 // (ADC_MAX - ADC_MIN)
@@ -161,44 +160,68 @@ def _ddc_worker():
         except Exception as e:
             print(f"DDC/CI: {e}")
 
-# ── Debounce ─────────────────────────────────────────────
-_debounce_b    = None
-_debounce_c    = None
-_debounce_last = None
-_debounce_timer = None
-_debounce_lock  = threading.Lock()
+# ── Throttle ─────────────────────────────────────────────
+# İlk değişikliği anında gönderir; sonraki değişiklikler THROTTLE_MS
+# cooldown'ı dolduğunda (ya da pot durduğunda trailing update olarak) gönderilir.
+_thr_lock      = threading.Lock()
+_thr_pending_b = None
+_thr_pending_c = None
+_thr_last_sent = 0.0   # time.monotonic()
+_thr_timer     = None
 
-def _flush_debounce():
-    global _debounce_b, _debounce_c, _debounce_timer
-    with _debounce_lock:
-        b, c = _debounce_b, _debounce_c
-        _debounce_timer = None
-    if b is not None or c is not None:
+def _enqueue(b, c):
+    try:
+        _ddc_queue.put_nowait((b, c))
+    except queue.Full:
+        try:
+            _ddc_queue.get_nowait()
+        except queue.Empty:
+            pass
         try:
             _ddc_queue.put_nowait((b, c))
         except queue.Full:
-            try:
-                _ddc_queue.get_nowait()
-            except queue.Empty:
-                pass
-            try:
-                _ddc_queue.put_nowait((b, c))
-            except queue.Full:
-                pass
+            pass
 
-def set_monitor_debounced(brightness=None, contrast=None):
-    global _debounce_b, _debounce_c, _debounce_timer
-    with _debounce_lock:
+def _flush_throttle():
+    global _thr_pending_b, _thr_pending_c, _thr_last_sent, _thr_timer
+    with _thr_lock:
+        b, c = _thr_pending_b, _thr_pending_c
+        _thr_pending_b = None
+        _thr_pending_c = None
+        _thr_last_sent = time.monotonic()
+        _thr_timer = None
+    if b is not None or c is not None:
+        _enqueue(b, c)
+
+def set_monitor_throttled(brightness=None, contrast=None):
+    global _thr_pending_b, _thr_pending_c, _thr_last_sent, _thr_timer
+    now = time.monotonic()
+    with _thr_lock:
         if brightness is not None:
-            _debounce_b = brightness
+            _thr_pending_b = brightness
         if contrast is not None:
-            _debounce_c = contrast
-        if _debounce_timer is not None:
-            _debounce_timer.cancel()
-        t = threading.Timer(DEBOUNCE_MS / 1000.0, _flush_debounce)
-        t.daemon = True
-        t.start()
-        _debounce_timer = t
+            _thr_pending_c = contrast
+        elapsed_ms = (now - _thr_last_sent) * 1000
+        if elapsed_ms >= THROTTLE_MS:
+            # Cooldown doldu — anında gönder
+            b, c = _thr_pending_b, _thr_pending_c
+            _thr_pending_b = None
+            _thr_pending_c = None
+            _thr_last_sent = now
+            if _thr_timer is not None:
+                _thr_timer.cancel()
+                _thr_timer = None
+        else:
+            b, c = None, None
+            # Trailing update için timer kur (sadece yoksa)
+            if _thr_timer is None:
+                remaining = (THROTTLE_MS - elapsed_ms) / 1000.0
+                t = threading.Timer(remaining, _flush_throttle)
+                t.daemon = True
+                t.start()
+                _thr_timer = t
+    if b is not None or c is not None:
+        _enqueue(b, c)
 
 # ── OSD ─────────────────────────────────────────────────
 class OSD:
@@ -376,8 +399,6 @@ def main():
 
     dev = connect_device()
 
-    buf_b = deque(maxlen=3)
-    buf_c = deque(maxlen=3)
     prev_b, prev_c = -1, -1
     last = "BRT"
 
@@ -386,22 +407,19 @@ def main():
             try:
                 data = dev.read(64)
                 if data and len(data) >= 2:
-                    buf_b.append(data[0])
-                    buf_c.append(data[1])
-                    if len(buf_b) == 3:
-                        b = map_brightness(sum(buf_b) // len(buf_b))
-                        c = map_contrast(sum(buf_c) // len(buf_c))
-                        bc = abs(b - prev_b) >= 1
-                        cc = abs(c - prev_c) >= 1
-                        if bc or cc:
-                            if bc: last = "BRT"
-                            if cc: last = "CON"
-                            set_monitor_debounced(
-                                brightness=b if bc else None,
-                                contrast=c if cc else None
-                            )
-                            osd.show(last, b, c)
-                            prev_b, prev_c = b, c
+                    b = map_brightness(data[0])
+                    c = map_contrast(data[1])
+                    bc = abs(b - prev_b) >= 1
+                    cc = abs(c - prev_c) >= 1
+                    if bc or cc:
+                        if bc: last = "BRT"
+                        if cc: last = "CON"
+                        set_monitor_throttled(
+                            brightness=b if bc else None,
+                            contrast=c if cc else None
+                        )
+                        osd.show(last, b, c)
+                        prev_b, prev_c = b, c
                 time.sleep(0.02)
 
             except OSError:
