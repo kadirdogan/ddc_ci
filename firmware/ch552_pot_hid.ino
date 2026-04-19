@@ -18,12 +18,12 @@ uint8_t adc_read_ch(uint8_t chan) {
     ADC_START = 1;              // dummy: mux settle
     while (ADC_START);
     __data uint16_t sum = 0;
-    for (__data uint8_t i = 0; i < 8; i++) {
+    for (__data uint8_t i = 0; i < 32; i++) {
         ADC_START = 1;
         while (ADC_START);
         sum += ADC_DATA;
     }
-    return (uint8_t)(sum >> 3); // 8 sample ortalaması
+    return (uint8_t)(sum >> 5); // 32 sample ortalaması
 }
 
 void led_blink(uint8_t count) {

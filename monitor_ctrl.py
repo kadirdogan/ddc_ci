@@ -433,8 +433,6 @@ def main():
                     pass
                 time.sleep(1.0)
                 dev = connect_device()
-                buf_b.clear()
-                buf_c.clear()
                 prev_b, prev_c = -1, -1
 
     except KeyboardInterrupt:
