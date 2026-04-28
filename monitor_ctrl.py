@@ -105,13 +105,13 @@ CLASS_NAME       = "PVM_OSD_V3"
 VENDOR_ID  = 0x1209
 PRODUCT_ID = 0xC55D
 
-ADC_MIN = 4
-ADC_MAX = 174
+ADC_MIN = 23
+ADC_MAX = 185
 
-CONTRAST_MIN = 25
+CONTRAST_MIN = 0
 CONTRAST_MAX = 100
 
-THROTTLE_MS = 80  # min DDC komutları arası süre (ms); ilk değişiklik anında gönderilir
+THROTTLE_MS = 30  # min DDC komutları arası süre (ms); ilk değişiklik anında gönderilir
 
 def map_brightness(raw):
     val = (ADC_MAX - raw) * 100 // (ADC_MAX - ADC_MIN)
@@ -400,7 +400,22 @@ def main():
     dev = connect_device()
 
     prev_b, prev_c = -1, -1
+    dir_b, dir_c = 0, 0
+    pend_b, pend_c = -1, -1
     last = "BRT"
+
+    def hyst(new, prev, direction, pending):
+        if prev < 0:
+            return True, new, 0, -1
+        d = new - prev
+        if d == 0:
+            return False, prev, direction, -1
+        same_dir = (d > 0 and direction >= 0) or (d < 0 and direction <= 0)
+        if same_dir:
+            return True, new, 1 if d > 0 else -1, -1
+        if pending >= 0 and (d > 0) == (pending > prev):
+            return True, new, 1 if d > 0 else -1, -1
+        return False, prev, direction, new
 
     try:
         while True:
@@ -409,8 +424,8 @@ def main():
                 if data and len(data) >= 2:
                     b = map_brightness(data[0])
                     c = map_contrast(data[1])
-                    bc = abs(b - prev_b) >= 1
-                    cc = abs(c - prev_c) >= 1
+                    bc, prev_b, dir_b, pend_b = hyst(b, prev_b, dir_b, pend_b)
+                    cc, prev_c, dir_c, pend_c = hyst(c, prev_c, dir_c, pend_c)
                     if bc or cc:
                         if bc: last = "BRT"
                         if cc: last = "CON"
@@ -419,7 +434,6 @@ def main():
                             contrast=c if cc else None
                         )
                         osd.show(last, b, c)
-                        prev_b, prev_c = b, c
                 time.sleep(0.02)
 
             except OSError:

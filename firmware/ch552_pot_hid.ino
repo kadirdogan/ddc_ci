@@ -63,26 +63,14 @@ void setup() {
 }
 
 void loop() {
-    static uint8_t last_b = 255, last_c = 255;
     static uint8_t sent_b = 255, sent_c = 255;
 
     uint8_t b = adc_read_ch(0);  // P1.1
     uint8_t c = adc_read_ch(1);  // P1.4
 
-    // ±1 raw jitter'i yoksay (signed aritmetik — uint8 overflow yok)
-    {
-        __data int16_t d = (int16_t)b - (int16_t)last_b;
-        if (d > 1 || d < -1) last_b = b;
-    }
-    {
-        __data int16_t d = (int16_t)c - (int16_t)last_c;
-        if (d > 1 || d < -1) last_c = c;
-    }
-
-    // Sadece değer değiştiğinde gönder
-    if (last_b != sent_b || last_c != sent_c) {
-        sent_b = last_b;
-        sent_c = last_c;
+    if (b != sent_b || c != sent_c) {
+        sent_b = b;
+        sent_c = c;
         HIDKey[0] = sent_b;
         HIDKey[1] = sent_c;
         USB_EP1_send();
